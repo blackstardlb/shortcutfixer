@@ -7,6 +7,7 @@ import kotlin.streams.toList
 
 val runtime: Runtime = Runtime.getRuntime()
 val gson = Gson()
+val backUpFile = File("${System.getProperty("user.home")}/.shortcuts_backup")
 
 val shortcuts = arrayListOf(
     "org.gnome.settings-daemon.plugins.media-keys/logout",
@@ -20,13 +21,18 @@ val shortcuts = arrayListOf(
 var areShortCutsDisabled: Boolean = false
 var instant: Instant = Instant.now()
 fun main() {
+    Thread.sleep(10000)
     val classNameToActivateFor: String = "jetbrains-idea-ce";
-
     var lastClassName: String? = null
+
+    if (getBackups().isNotEmpty()) {
+        resetShortcuts()
+    }
     while (true) {
         try {
             Thread.sleep(500)
             val xdoid = runCommand("xdotool getactivewindow")
+            println(xdoid)
             val xprop = runCommand("xprop -id ${xdoid[0]}")
 
             val currentClassName =
@@ -48,7 +54,7 @@ fun main() {
                 // Focus window changed;
             }
         } catch (e: Exception) {
-            disableShortcuts()
+            resetShortcuts()
             e.printStackTrace()
         }
     }
@@ -72,26 +78,36 @@ fun disableShortcuts() {
     areShortCutsDisabled = true
     backupShortcuts()
     println("Disabling shortcuts")
-    shortcuts.forEach { runCommand("gsettings set ${it.replace("/", " ")} []") }
+    shortcuts.forEach { println(runCommand("gsettings set ${it.replace("/", " ")} []")) }
 }
 
 fun resetShortcuts() {
     areShortCutsDisabled = false
     println("Enabling shortcuts")
-    getBackups().forEach{ (shortcut, value) -> runCommand("gsettings set ${shortcut.replace("/", " ")} $value") }
+    getBackups().forEach{ (shortcut, value) ->
+        println(
+            runCommand(
+                "gsettings set ${shortcut.replace(
+                    "/",
+                    " "
+                )} $value"
+            )
+        )
+    }
+    if (backUpFile.exists()) {
+        backUpFile.delete()
+    }
 }
 
 fun backupShortcuts() {
-    val file = File("${System.getProperty("user.home")}/.shortcuts_backup")
-    if (!file.exists()) file.createNewFile()
+    if (!backUpFile.exists()) backUpFile.createNewFile()
     val shortcutMap = shortcuts.map { Pair(it, readKey(it)) }.toMap()
-    file.writeText(gson.toJson(shortcutMap));
+    backUpFile.writeText(gson.toJson(shortcutMap));
 }
 
 fun getBackups(): Map<String, String> {
-    val file = File("${System.getProperty("user.home")}/.shortcuts_backup")
-    if (file.exists()) {
-        return gson.fromJson(file.readText(),  hashMapOf<String, String>().javaClass);
+    if (backUpFile.exists()) {
+        return gson.fromJson(backUpFile.readText(),  hashMapOf<String, String>().javaClass);
     }
     return emptyMap()
 }
